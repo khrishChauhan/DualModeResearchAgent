@@ -1,130 +1,80 @@
-"""
-FastAPI server for the AI Equity Research Agent.
-
-Wraps the LangGraph workflow as a REST API so the Next.js
-frontend (or any HTTP client) can trigger analysis.
-
-Run with:
-    uvicorn server:app --reload
-
-Docs at:
-    http://127.0.0.1:8000/docs
-"""
-
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import traceback
 
+# Correctly import the workflow from the core package
 from core.workflow import build_graph
-from core.rag import get_client, create_collection, ingest_document, COLLECTION_NAME
-from core.sec_fetch import fetch_latest_10k_risks, fetch_indian_stock_risks
 
-# ── Initialise the app ────────────────────────────────────────────────────────
+app = FastAPI()
 
-app = FastAPI(
-    title="AI Equity Research Agent API",
-    description="Automated financial analysis using LLMs and SEC filings",
-    version="1.0.0",
-)
-
-# CORS — allow the Next.js frontend (and any other origin) to call the API
+# 2. Add CORS middleware to allow requests from the Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Build the LangGraph workflow once at startup
-graph = build_graph()
-
-
-# ── Routes ────────────────────────────────────────────────────────────────────
+# 4. Initialize the graph once at startup
+try:
+    graph = build_graph()
+except Exception as e:
+    print(f"Error building graph: {e}")
+    graph = None
 
 @app.get("/")
 def root():
-    """Health-check endpoint."""
     return {"message": "Equity Research Agent API running"}
 
-
+# 3. Create endpoint GET /analyze
 @app.get("/analyze")
-def analyze(
-    ticker: str = Query(..., description="Stock ticker symbol, e.g. NVDA"),
-    mode: str = Query("quick", description="Analysis mode: 'quick' or 'deep'"),
+async def analyze(
+    ticker: str = Query(..., description="Stock ticker symbol"),
+    mode: str = Query("quick", description="Analysis mode: quick or deep"),
 ):
     """
-    Run the full equity research pipeline for a given ticker.
-
-    - **quick** mode: financials → KPI analysis → RAG risk retrieval → risk summary → report
-    - **deep** mode: adds peer comparison, DCF valuation, investment thesis,
-      senior analyst reflection, and confidence scoring
+    Exposes the LangGraph equity research workflow.
     """
+    if not graph:
+        raise HTTPException(status_code=500, detail="Analysis graph not initialized")
 
-    # ── Validate inputs ───────────────────────────────────────────────────
-    ticker = ticker.strip().upper()
-    if not ticker:
-        raise HTTPException(status_code=400, detail="Ticker symbol is required")
-
-    mode = mode.strip().lower()
-    if mode not in ("quick", "deep"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid mode '{mode}'. Must be 'quick' or 'deep'.",
-        )
-
-    # ── Auto-ingest SEC data if not already in Qdrant ─────────────────────
-    client = get_client()
-    filing_year = 2023  # default
-
-    already_ingested = False
-    if client.collection_exists(COLLECTION_NAME):
-        from qdrant_client import models as qdrant_models
-
-        results = client.scroll(
-            collection_name=COLLECTION_NAME,
-            scroll_filter=qdrant_models.Filter(
-                must=[
-                    qdrant_models.FieldCondition(
-                        key="ticker",
-                        match=qdrant_models.MatchValue(value=ticker),
-                    )
-                ]
-            ),
-            limit=1,
-            with_payload=True,
-        )
-        if results[0]:
-            filing_year = results[0][0].payload.get("year", 2023)
-            already_ingested = True
-
-    if not already_ingested:
-        # Auto-fetch from SEC EDGAR (US) or Yahoo Finance (Indian stocks)
-        try:
-            if ticker.endswith(".NS") or ticker.endswith(".BO"):
-                risk_text, filing_year = fetch_indian_stock_risks(ticker)
-            else:
-                risk_text, filing_year = fetch_latest_10k_risks(ticker)
-        except Exception as e:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Failed to fetch SEC/Yahoo data for {ticker}: {e}",
-            )
-
-        if not client.collection_exists(COLLECTION_NAME):
-            create_collection()
-        ingest_document(risk_text, ticker, filing_year)
-
-    # ── Run the LangGraph workflow ────────────────────────────────────────
     try:
-        final_state = graph.invoke(
-            {"ticker": ticker, "mode": mode, "filing_year": filing_year}
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis pipeline failed for {ticker}: {e}",
-        )
+        # Pre-process inputs
+        ticker = ticker.strip().upper()
+        mode = mode.strip().lower()
 
-    # ── Return the assembled report ───────────────────────────────────────
-    report = final_state.get("report", {})
-    return report
+        # 4. Run the LangGraph workflow
+        # Defaulting filing_year to 2023 for general extraction
+        result_state = graph.invoke({
+            "ticker": ticker,
+            "mode": mode,
+            "filing_year": 2023 
+        })
+
+        # 5. Return the result JSON (stored in the 'report' key of the graph state)
+        report = result_state.get("report", {})
+        
+        if not report:
+             raise Exception("Analysis pipeline returned an empty report.")
+
+        return report
+
+    except Exception as e:
+        # 6. Add try/except so errors return JSON instead of crashing
+        error_details = traceback.format_exc()
+        print(f"Pipeline Error for {ticker}: {error_details}")
+        
+        # Check for specific known errors (like API keys)
+        error_msg = str(e)
+        if "API Key" in error_msg or "401" in error_msg:
+            error_msg = "Authentication error: Please check your AI API keys in the .env file."
+        
+        raise HTTPException(
+            status_code=500, 
+            detail={
+                "error": "Internal Server Error",
+                "message": error_msg,
+                "ticker": ticker
+            }
+        )

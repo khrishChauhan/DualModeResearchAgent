@@ -7,17 +7,25 @@ BASE = "https://api.polygon.io"
 
 
 def get_us_financials(ticker, filing_year=None):
-    url = (
-        f"https://api.polygon.io/vX/reference/financials"
-        f"?ticker={ticker}&limit=2&timeframe=annual"
-        f"&sort=period_of_report_date&order=desc"
-        f"&include_sources=true"
-    )
-    if filing_year:
-        url += f"&period_of_report_date.lte={filing_year}-12-31"
-    url += f"&apiKey={POLYGON_API_KEY}"
-    response = requests.get(url)
-    return response.json()
+    try:
+        url = (
+            f"https://api.polygon.io/vX/reference/financials"
+            f"?ticker={ticker}&limit=2&timeframe=annual"
+            f"&sort=period_of_report_date&order=desc"
+            f"&include_sources=true"
+        )
+        if filing_year:
+            url += f"&period_of_report_date.lte={filing_year}-12-31"
+        url += f"&apiKey={POLYGON_API_KEY}"
+        response = requests.get(url)
+        data = response.json()
+        if data.get("status") == "OK" and len(data.get("results", [])) >= 2:
+            return data
+    except Exception:
+        pass
+        
+    # Fallback to yfinance (standardizes structure to match Polygon)
+    return get_indian_financials(ticker, filing_year=filing_year)
 
 
 def get_indian_financials(ticker, filing_year=None):
