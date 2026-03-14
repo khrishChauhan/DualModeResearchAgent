@@ -13,3 +13,5 @@ streamlit
 beautifulsoup4
 lxml
 yfinance
+fastapi
+uvicorn[standard]
