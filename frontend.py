@@ -10,7 +10,7 @@ def get_qdrant_client():
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="oopsTree · Financial Intelligence",
+    page_title="Quant  Agent · Financial Intelligence",
     page_icon="🌳",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -220,7 +220,7 @@ def confidence_color(level):
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("## 🌳 oopsTree")
+    st.markdown("## 🌳 Quant  Agent")
     st.markdown("<p style='color:#64748b;font-size:0.8rem;margin-top:-10px;'>Financial Intelligence Platform</p>", unsafe_allow_html=True)
     st.divider()
 
@@ -259,7 +259,7 @@ with st.sidebar:
 
 st.markdown("""
 <div class="hero">
-  <h1>🌳 oopsTree · Financial Intelligence</h1>
+  <h1>🌳 Quant  Agent · Financial Intelligence</h1>
   <p>AI-powered equity research · KPI analysis · RAG risk assessment · DCF valuation · Investment thesis</p>
 </div>
 """, unsafe_allow_html=True)
@@ -410,19 +410,7 @@ if run_btn:
         conf_css = f"confidence-{conf_level.lower()}" if conf_level in ("HIGH", "MEDIUM", "LOW") else "confidence-medium"
         action = confidence.get("recommended_action", "HOLD")
 
-        st.markdown(f"""
-        <div class="confidence-badge {conf_css}">
-          <div class="confidence-label" style="color:{conf_color};">Investment Confidence</div>
-          <div class="confidence-score" style="color:{conf_color};">{conf_score:.0%} — {conf_level}</div>
-          <div style="color:#cbd5e1;font-size:0.9rem;margin-top:0.3rem;">
-            Recommended Action: <strong style="color:{conf_color};">{action}</strong>
-          </div>
-          <div style="color:#94a3b8;font-size:0.85rem;margin-top:0.5rem;line-height:1.5;">
-            {confidence.get('conclusion', '')}
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
+       
     # ── KPI Metrics row ───────────────────────────────────────────────────────
     st.markdown('<div class="section-header"><h2>📊 Financial KPIs</h2></div>', unsafe_allow_html=True)
 
@@ -663,7 +651,7 @@ if run_btn:
         st.json(report)
 
     st.divider()
-    st.caption("oopsTree · Financial Intelligence Platform · Powered by Groq, GLM-4.7, Qdrant, LangGraph")
+    st.caption("Quant Agent · Financial Intelligence Platform · Powered by Groq, GLM-4.7, Qdrant, LangGraph")
 
 else:
     # ── Landing placeholder ────────────────────────────────────────────────────
